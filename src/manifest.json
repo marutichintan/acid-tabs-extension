@@ -15,8 +15,17 @@
     "storage",
     "webNavigation",
     "tabs",
-    "tabGroups"
+    "tabGroups",
+    "activeTab",
+    "scripting"
   ],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.load.js"]
+    }
+  ],
+  "host_permissions": ["https://*.aws.amazon.com/"],
   "web_accessible_resources": [
     {
       "resources": ["content.styles.css", "acid-128.png", "acid-32.png"],
