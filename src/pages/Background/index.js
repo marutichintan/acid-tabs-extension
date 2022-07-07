@@ -184,16 +184,21 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
     let tab = sender.tab;
     if (request.action === 'getSource') {
       let { acc_id, region } = request.source;
-      console.log('Amazon Account ID: ', acc_id.replace('Account ID: ', ''));
-      let acc_id_exist = AWS_ACCOUNTS.find((reg) => reg.id === acc_id);
-      if (!acc_id_exist) {
-        AWS_ACCOUNTS.push({
-          name: `${region}-${acc_id.replace('Account ID: ', '')}`,
-          id: `${region}-${acc_id.replace('Account ID: ', '')}`,
-        });
-      }
+      const regex = /\d{4}-\d{4}-\d{4}/gm;
+      let m = regex.exec(acc_id);
+      if (m) {
+        acc_id = m[0];
+        console.log('Amazon Account ID: ', acc_id.replace('Account ID: ', ''));
+        let acc_id_exist = AWS_ACCOUNTS.find((reg) => reg.id === acc_id);
+        if (!acc_id_exist) {
+          AWS_ACCOUNTS.push({
+            name: `${region}-${acc_id.replace('Account ID: ', '')}`,
+            id: `${region}-${acc_id.replace('Account ID: ', '')}`,
+          });
+        }
 
-      handleTab(tab.id, `${region}-${acc_id.replace('Account ID: ', '')}`);
+        handleTab(tab.id, `${region}-${acc_id.replace('Account ID: ', '')}`);
+      }
       // assignAllTabsInWindow(`${region}-${acc_id.replace('Account ID: ', '')}`);
     }
   } catch (e) {
