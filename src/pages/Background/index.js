@@ -1,31 +1,7 @@
-import debounce from 'lodash.debounce';
-
-let collapsed = false;
-
-const getAll = (ptrn) => {
+const get = (keys) => {
   return new Promise((resolve) => {
-    chrome.storage.sync.get(null, (data) => {
-      if (!data) {
-        resolve(undefined);
-      } else {
-        if (ptrn) {
-          resolve(Object.entries(data).filter(([k, v]) => k.match(ptrn)));
-        } else {
-          resolve(Object.entries(data));
-        }
-      }
-    });
-  });
-};
-
-const get = (key) => {
-  return new Promise((resolve) => {
-    chrome.storage.sync.get(key, (data) => {
-      if (!data) {
-        resolve(undefined);
-      } else {
-        resolve(data[key]);
-      }
+    chrome.storage.sync.get(keys, (data) => {
+      resolve(data);
     });
   });
 };
@@ -38,190 +14,138 @@ const set = (key, value) => {
   });
 };
 
-const tabColors = [
-  'grey',
-  'yellow',
-  'blue',
-  'purple',
-  'green',
-  'red',
-  'pink',
-  'cyan',
+const AWS_ACCOUNTS = [
+  // { name: 'US East (N. Virginia)', id: 'us-east-1' },
+  // { name: 'US East (Ohio)', id: 'us-east-2' },
+  // { name: 'US West (N. California)', id: 'us-west-1' },
+  // { name: 'US West (Oregon)', id: 'us-west-2' },
+  // { name: 'Europe (Frankfurt)', id: 'eu-central-1' },
+  // { name: 'Europe (Ireland)', id: 'eu-west-1' },
+  // { name: 'Europe (London)', id: 'eu-west-2' },
+  // { name: 'Europe (Paris)', id: 'eu-west-3' },
+  // { name: 'Europe (Milan)', id: 'eu-south-1' },
+  // { name: 'Europe (Stockholm)', id: 'eu-north-1' },
+  // { name: 'Asia Pacific (Hong Kong)', id: 'ap-east-1' },
+  // { name: 'Asia Pacific (Mumbai)', id: 'ap-south-1' },
+  // { name: 'Asia Pacific (Tokyo)', id: 'ap-northeast-1' },
+  // { name: 'Asia Pacific (Seoul)', id: 'ap-northeast-2' },
+  // { name: 'Asia Pacific (Osaka)', id: 'ap-northeast-3' },
+  // { name: 'Asia Pacific (Singapore)', id: 'ap-southeast-1' },
+  // { name: 'Asia Pacific (Sydney)', id: 'ap-southeast-2' },
+  // { name: 'Canada (Central)', id: 'ca-central-1' },
+  // { name: 'China (Beijing)', id: 'cn-north-1' },
+  // { name: 'China (Ningxia)', id: 'cn-northwest-1' },
+  // { name: 'Africa (Cape Town)', id: 'af-south-1' },
+  // { name: 'Middle East (Bahrain)', id: 'me-south-1' },
+  // { name: 'South America (São Paulo)', id: 'sa-east-1' },
+  // { name: 'AWS GovCloud (US-East)', id: 'us-gov-east-1' },
+  // { name: 'AWS GovCloud (US-West)', id: 'us-gov-west-1' },
 ];
 
-function matchRuleShort(rule) {
-  var escapeRegex = (str) => str.replace(/([.*+?^=!:${}()|\[\]\/\\])/g, '\\$1');
-  return new RegExp(rule.split('*').map(escapeRegex).join('.*'));
-}
+const AWS_REGIONS_NAME = [
+  { name: 'US East (N. Virginia)', id: 'us-east-1' },
+  { name: 'US East (Ohio)', id: 'us-east-2' },
+  { name: 'US West (N. California)', id: 'us-west-1' },
+  { name: 'US West (Oregon)', id: 'us-west-2' },
+  { name: 'Europe (Frankfurt)', id: 'eu-central-1' },
+  { name: 'Europe (Ireland)', id: 'eu-west-1' },
+  { name: 'Europe (London)', id: 'eu-west-2' },
+  { name: 'Europe (Paris)', id: 'eu-west-3' },
+  { name: 'Europe (Milan)', id: 'eu-south-1' },
+  { name: 'Europe (Stockholm)', id: 'eu-north-1' },
+  { name: 'Asia Pacific (Hong Kong)', id: 'ap-east-1' },
+  { name: 'Asia Pacific (Mumbai)', id: 'ap-south-1' },
+  { name: 'Asia Pacific (Tokyo)', id: 'ap-northeast-1' },
+  { name: 'Asia Pacific (Seoul)', id: 'ap-northeast-2' },
+  { name: 'Asia Pacific (Osaka)', id: 'ap-northeast-3' },
+  { name: 'Asia Pacific (Singapore)', id: 'ap-southeast-1' },
+  { name: 'Asia Pacific (Sydney)', id: 'ap-southeast-2' },
+  { name: 'Canada (Central)', id: 'ca-central-1' },
+  { name: 'China (Beijing)', id: 'cn-north-1' },
+  { name: 'China (Ningxia)', id: 'cn-northwest-1' },
+  { name: 'Africa (Cape Town)', id: 'af-south-1' },
+  { name: 'Middle East (Bahrain)', id: 'me-south-1' },
+  { name: 'South America (São Paulo)', id: 'sa-east-1' },
+  { name: 'AWS GovCloud (US-East)', id: 'us-gov-east-1' },
+  { name: 'AWS GovCloud (US-West)', id: 'us-gov-west-1' },
+];
 
-const getRules = async () => {
-  const groupRules = await get('groupRules');
-  return groupRules ? groupRules.sort((a, b) => a.key - b.key) : [];
-};
+// const tabColors = [ 'grey', 'yellow', 'blue', 'purple', 'green', 'red', 'pink', 'cyan' ];
+const tabColors = ['grey', 'yellow', 'blue', 'purple', 'green', 'red'];
 
-const getCurrentWindow = async () => {
-  const window = await chrome.windows.getCurrent();
-  return window;
-};
-
-const getRuleForTabGroup = async (tabGroupId) => {
-  const windowGroupEntries = await getAll(`window:.*:rule:.*:groupId`);
-  const match = windowGroupEntries.find(([k, v]) => v === tabGroupId);
-  if (match) {
-    const [k, v] = match;
-    const ruleId = k
-      .replace(new RegExp('window:.*:rule:'), '')
-      .replace(':groupId', '');
-    const groupRules = await get('groupRules');
-    return groupRules.find((r) => r.id.toString() === ruleId);
-  }
-  return null;
-};
-
-const getAcidTabGroups = async (windowId = null) => {
-  const pattern = windowId
-    ? `window:${windowId}:rule:.*:groupId`
-    : `window:.*:rule:.*:groupId`;
-  const windowGroupEntries = await getAll(pattern);
-  return windowGroupEntries.map(([k, v]) => v) || [];
-};
-
-const getTabGroup = async (id) =>
-  new Promise((resolve) => chrome.tabGroups.get(id, resolve));
-
-const updateTabGroups = async (args = {}) => {
-  if (chrome.tabGroups) {
-    if (args.collapsed !== undefined) {
-      collapsed = args.collapsed;
-    }
-    const tabGroups = await getAcidTabGroups();
-    for (const tabGroupId of tabGroups) {
-      try {
-        const group = await getTabGroup(tabGroupId);
-        if (!group) {
-          console.log('no group');
-          continue;
-        }
-        chrome.tabGroups.update(tabGroupId, args);
-        const rule = await getRuleForTabGroup(tabGroupId);
-        if (rule) updateTabGroupForRule(group.windowId, group.id, rule);
-      } catch (e) {
-        console.error(e.stack);
-      }
-    }
-  }
-};
-
-const kickoutNonMatchingTabs = async () => {
-  const window = await getCurrentWindow();
-  const tabGroups = await getAcidTabGroups();
-  const rules = await getRules();
-  const allTabs = await chrome.tabs.query({ windowId: window.id });
-  for (const tabGroupId of tabGroups) {
-    const tabsInGroup = allTabs.filter((t) => t.groupId === tabGroupId);
-    for (const tab of tabsInGroup) {
-      const rule = checkForRuleMatch(tab.url, rules) || null;
-      if (!rule) await chrome.tabs.ungroup(tab.id);
-    }
-  }
-};
-
-const getColorForRule = (rule, rules) => {
-  if (rule.color) return rule.color;
-  const index = rules.findIndex((r) => r.id === rule.id);
+const getRegionByKey = (key) => AWS_ACCOUNTS.find((reg) => reg.id === key);
+const getRegionKeys = () => AWS_ACCOUNTS.map((reg) => reg.id);
+const getColorForRegion = (region) => {
+  const index = AWS_ACCOUNTS.findIndex((reg) => reg.id === region.id);
   const color = tabColors[index % tabColors.length];
   return color;
 };
 
-const getGroupIdForRule = async (windowId, rule) => {
-  const key = `window:${windowId}:rule:${rule.id}:groupId`;
-  const ruleId = await get(key);
-  return ruleId;
+const assignGroupIdsForRegions = async () => {
+  for (const reg of AWS_ACCOUNTS) {
+    await getOrCreateGroupIdForRegion(reg);
+  }
 };
 
-const setGroupIdForRule = async (rule, windowId, groupId) => {
-  const key = `window:${windowId}:rule:${rule.id}:groupId`;
+const getOrCreateGroupIdForRegion = async (reg) => {
+  const key = `region:${reg.id}:groupId`;
+  const result = await get(key);
+  if (!result) {
+    const newId = 90000 + Math.floor(Math.random() * 10000);
+    await set(key, newId);
+    return newId;
+  }
+  return result[key];
+};
+
+const getGroupIdForRegion = async (windowId, reg) => {
+  const key = `window:${windowId}:region:${reg.id}:groupId`;
+  const result = await get(key);
+  if (!result) {
+    return undefined;
+  }
+  return result[key];
+};
+
+const setGroupIdForRegion = async (reg, windowId, groupId) => {
+  const key = `window:${windowId}:region:${reg.id}:groupId`;
   await set(key, groupId);
 };
 
-const getActiveGroupIds = async (windowId) => {
-  const rules = await getRules();
-  const groupIds = await Promise.all(
-    rules.map((r) => getGroupIdForRule(windowId, r))
-  );
-  return groupIds.filter((gId) => !!gId) || [];
-};
-
-const assignAllTabsInWindow = async (check_via_acc = '') => {
+const assignAllTabsInWindow = async (acc_id) => {
   const tabs = await chrome.tabs.query({ status: 'complete' });
-  const window = await getCurrentWindow();
   for (const tab of tabs) {
-    await handleTab(tab.id, check_via_acc);
+    await handleTab(tab.id, acc_id);
   }
-  //   alignTabs(window.id);
 };
 
-const checkForRuleMatch = (url, rules) => {
-  for (const rule of rules) {
-    const lineSplit = rule.pattern.split('\n');
-    console.log('patterns', rule.pattern, 'url,', url);
-    if (!rule.pattern.includes(url)) return rule;
-    // const patterns = lineSplit
-    //   .reduce((prev, cur) => prev.concat(cur.split(' ')), [])
-    //   .filter((p) => p.length)
-    //   .map((p) => matchRuleShort(p.trim()));
-    // for (const pattern of patterns) {
-    //   if (url.match(pattern)) return rule;
-    // }
+// Return region if aws and region found
+const checkForAwsAccount = (acc_id, url) => {
+  console.log('AWS_ACCOUNTS', AWS_ACCOUNTS);
+  console.log('checkForAwsRegion', acc_id, url);
+  if (acc_id === false) return null;
+  // Would be more robust to parse url but whatevs
+  const isAws = url.includes('console.aws.amazon.com');
+  const isAwsAcc = acc_id.includes('-');
+  if (!isAwsAcc) {
+    console.log('Not an AWS account', acc_id);
+    return null;
   }
-  return null;
-};
-
-const clearOldWindowEntries = async () => {
-  const allWindowEntries = await getAll('window:.*:tabGroups');
-  const windows = await chrome.windows.getAll();
-  const oldWindowEntries = allWindowEntries.filter(
-    ([k, v]) => !windows.some((w) => k.includes(`window:${w.id}:tabGroups`))
-  );
-
-  const oldKeys = oldWindowEntries.map(([k, _]) => k);
-  await chrome.storage.sync.remove(oldKeys);
-};
-
-const clearOldEntries = async () => {
-  const allRuleGroupEntries = await getAll('window:.*:rule:.*:groupId');
-  const rules = await getRules();
-  const oldRuleGroupEntries = allRuleGroupEntries.filter(
-    ([k, v]) => !rules.some((r) => k.includes(`rule:${r.id}:groupId`))
-  );
-
-  for (const [k, groupId] of oldRuleGroupEntries) {
-    const tabs = await new Promise((resolve) => chrome.tabs.query({}, resolve));
-    const tabsStillInGroup = tabs.filter((t) => t.groupId === groupId);
-    for (const tab of tabsStillInGroup) {
-      await new Promise((resolve) => chrome.tabs.ungroup(tab.id, resolve));
-    }
+  if (!isAws) {
+    console.log('Not an AWS Website', url, isAws);
+    return null;
   }
-  const oldKeys = oldRuleGroupEntries.map(([k, _]) => k);
-  await chrome.storage.sync.remove(oldKeys);
+  const regionMatch = AWS_ACCOUNTS.find((reg) => {
+    console.log('regionMatch', reg, acc_id, url);
+    return acc_id.includes(reg.id);
+  });
+  return regionMatch || null;
 };
 
-const updateTabGroupForRule = async (windowId, groupId, rule) => {
+const updateTabGroupForRegion = async (groupId, region) => {
   if (chrome.tabGroups) {
-    const rules = await getRules();
-    const color = getColorForRule(rule, rules);
-    const group = await getTabGroup(groupId);
-    if (!group) return;
-
-    const tabs = await new Promise((resolve) =>
-      chrome.tabs.query({ windowId }, resolve)
-    );
-    const tabsInGroup = tabs.filter((t) => t.groupId === groupId);
-    const title =
-      group.collapsed && tabsInGroup.length
-        ? `${rule.name} (${tabsInGroup.length})`
-        : `${rule.pattern}`;
-    chrome.tabGroups.update(groupId, { title, color });
+    const color = getColorForRegion(region);
+    chrome.tabGroups.update(groupId, { title: region.id, color });
   }
 };
 
@@ -241,127 +165,56 @@ const getOrCreateTabGroup = async (windowId, tabId, existingGroupId) => {
   return groupId;
 };
 
-const alignTabs = async (windowId) => {
-  if (chrome.tabGroups) {
-    const rules = await getRules();
-    const orderedRules = rules.sort((a, b) => a.key - b.key);
-    const currentTabGroups = await new Promise((resolve) =>
-      chrome.tabGroups.query({ windowId }, resolve)
-    );
-    const tabs = await new Promise((resolve) =>
-      chrome.tabs.query({ windowId }, resolve)
-    );
-    let offset = tabs.filter((t) => t.pinned).length;
-    for (const r of orderedRules) {
-      const groupId = await getGroupIdForRule(windowId, r);
-      const tabsInGroup = tabs.filter((t) => t.groupId === groupId);
-      if (currentTabGroups.some((g) => g.id === groupId)) {
-        chrome.tabGroups.move(groupId, { index: offset }, () => {
-          if (chrome.runtime.lastError) {
-            console.log(chrome.runtime.lastError.message);
-          }
-        });
-        // await new Promise(resolve => chrome.tabGroups.move(groupId, { index: 0 }, resolve))
-        offset = offset + tabsInGroup.length;
-      }
-    }
+const handleTab = async (tabId, acc_id = false) => {
+  const tab = await chrome.tabs.get(tabId);
+  const windowId = tab.windowId;
+  const region = tab.url ? checkForAwsAccount(acc_id, tab.url) : null;
+  console.log('handleTab', tabId, acc_id, region);
+  if (region) {
+    const existingGroupId = await getGroupIdForRegion(windowId, region);
+    const groupId = await getOrCreateTabGroup(windowId, tabId, existingGroupId);
+    updateTabGroupForRegion(groupId, region);
+    await setGroupIdForRegion(region, windowId, groupId);
   }
 };
 
-const handleTab = async (tabId, check_via_acc = false) => {
+chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
   try {
-    const tab = await chrome.tabs.get(tabId);
-    const windowId = tab.windowId;
-    const rules = await getRules();
-    const rule =
-      checkForRuleMatch(check_via_acc ? check_via_acc : tab.url, rules) || null;
-    if (rule) {
-      const existingGroupId = await getGroupIdForRule(windowId, rule);
-      const groupId = await getOrCreateTabGroup(
-        windowId,
-        tabId,
-        existingGroupId
-      );
-      updateTabGroupForRule(windowId, groupId, rule);
-      if (existingGroupId !== groupId) {
-        await setGroupIdForRule(rule, windowId, groupId);
+    console.log('chrome.runtime.onMessage.addListener', sender.tab);
+    let tab = sender.tab;
+    if (request.action === 'getSource') {
+      let { acc_id, region } = request.source;
+      console.log('Amazon Account ID: ', acc_id.replace('Account ID: ', ''));
+      let acc_id_exist = AWS_ACCOUNTS.find((reg) => reg.id === acc_id);
+      if (!acc_id_exist) {
+        AWS_ACCOUNTS.push({
+          name: `${region}-${acc_id.replace('Account ID: ', '')}`,
+          id: `${region}-${acc_id.replace('Account ID: ', '')}`,
+        });
       }
-    } else {
-      const tabGroups = await getAcidTabGroups();
-      const inAcidTabGroup = tabGroups.includes(tab.groupId);
-      if (inAcidTabGroup) await chrome.tabs.ungroup(tab.id);
+
+      handleTab(tab.id, `${region}-${acc_id.replace('Account ID: ', '')}`);
+      // assignAllTabsInWindow(`${region}-${acc_id.replace('Account ID: ', '')}`);
     }
   } catch (e) {
     console.error(e.stack);
   }
-};
+});
 
-chrome.webNavigation.onCommitted.addListener(async ({ tabId, url }) => {
+chrome.webNavigation.onDOMContentLoaded.addListener(async (details) => {
+  const { tabId, url, frameId } = details;
+  console.log('chrome.webNavigation.onDOMContentLoaded tabId url', tabId, url);
   handleTab(tabId);
 });
 
 chrome.tabs.onActivated.addListener(async ({ tabId, windowId }) => {
+  console.log(chrome.tabs.get(tabId));
   handleTab(tabId);
 });
 
 // Scan all existing tabs and assign them
-try {
-  assignAllTabsInWindow();
-  kickoutNonMatchingTabs();
-} catch (e) {
-  console.error(e.stack);
-}
+// assignAllTabsInWindow();
 
-chrome.action.onClicked.addListener((tab) => {
-  assignAllTabsInWindow();
-  kickoutNonMatchingTabs();
-});
-
-chrome.commands.onCommand.addListener((command) => {
-  if (command === 'toggle-collapse') {
-    updateTabGroups({ collapsed: !collapsed });
-  }
-});
-
-chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
-  try {
-    console.log('chrome.runtime.onMessage.addListener');
-    if (request.action === 'getSource') {
-      let acc_id = request.source;
-      console.log('Amazon Account ID: ', acc_id.replace('Account ID: ', ''));
-      assignAllTabsInWindow(acc_id.replace('Account ID: ', ''));
-    }
-
-    // if (request.updated) {
-    //   await kickoutNonMatchingTabs();
-    //   await clearOldEntries();
-    //   await clearOldWindowEntries();
-    //   assignAllTabsInWindow();
-    // } else if (request.collapse) {
-    //   updateTabGroups({ collapsed: true });
-    // } else if (request.expand) {
-    //   updateTabGroups({ collapsed: false });
-    // }
-  } catch (e) {
-    console.error(e.stack);
-  }
-});
-
-const handleTabGroupUpdate = async (tabGroup) => {
-  console.log('handleTabGroupUpdate');
-  alignTabs(tabGroup.windowId);
-  const rules = await getRules();
-  for (const r of rules) {
-    const gId = await getGroupIdForRule(tabGroup.windowId, r);
-    if (gId === tabGroup.id) {
-      updateTabGroupForRule(tabGroup.windowId, tabGroup.id, r);
-      return;
-    }
-  }
-};
-
-if (chrome.tabGroups) {
-  chrome.tabGroups.onUpdated.addListener(
-    debounce(handleTabGroupUpdate, 100, { leading: true, trailing: false })
-  );
-}
+// chrome.action.onClicked.addListener((tab) => {
+//   assignAllTabsInWindow();
+// });

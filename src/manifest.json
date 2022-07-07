@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Acid Tabs",
-  "description": "Auto-Grouping Magic for your Tabs",
+  "name": "AWS Tabs",
+  "description": "Auto-Grouping AWS Acc with Region for your Tabs",
   "options_page": "options.html",
   "background": { "service_worker": "background.bundle.js" },
   "action": {
